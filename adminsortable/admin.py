@@ -1,4 +1,7 @@
 import json
+import logging
+import traceback
+
 from django.conf import settings
 from django.conf.urls.defaults import patterns, url
 from django.contrib.admin import ModelAdmin, TabularInline, StackedInline
@@ -13,6 +16,9 @@ from adminsortable.fields import SortableForeignKey
 from adminsortable.models import Sortable
 
 STATIC_URL = settings.STATIC_URL
+
+
+log = logging.getLogger(__name__)
 
 
 class SortableAdmin(ModelAdmin):
@@ -176,8 +182,10 @@ class SortableAdmin(ModelAdmin):
                     obj.save()
                     start_index += step
                 response = {'objects_sorted': True}
-            except (KeyError, IndexError, klass.DoesNotExist, AttributeError):
-                pass
+            except (KeyError, IndexError, klass.DoesNotExist, AttributeError), e:
+				log.error('Adminsortable do_sorting_view weirdness.')
+				log.exception(e)
+				response = {'objects_sorted': False}
         else:
             response = {'objects_sorted': False}
         return HttpResponse(json.dumps(response, ensure_ascii=False), mimetype='application/json')
