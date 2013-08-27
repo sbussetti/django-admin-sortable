@@ -1,5 +1,4 @@
 import json
-import logging
 
 from django import VERSION as DJANGO_VERSION
 from django.contrib.contenttypes.generic import (GenericStackedInline,
@@ -46,6 +45,29 @@ class SortableAdminBase(object):
             extra_context=extra_context)
 
 
+class SortableAdminBase(object):
+    def changelist_view(self, request, extra_context=None):
+        """
+        If the model that inherits Sortable has more than one object,
+        its sort order can be changed. This view adds a link to the
+        object_tools block to take people to the view to change the sorting.
+        """
+
+        if get_is_sortable(self.queryset(request)):
+            self.change_list_template = \
+                self.sortable_change_list_with_sort_link_template
+            self.is_sortable = True
+
+        if extra_context is None:
+            extra_context = {}
+
+        extra_context.update({
+            'change_list_template_extends': self.change_list_template_extends
+        })
+        return super(SortableAdminBase, self).changelist_view(request,
+            extra_context=extra_context)
+
+
 class SortableAdmin(SortableAdminBase, ModelAdmin):
     """
     Admin class to add template overrides and context objects to enable
@@ -59,6 +81,9 @@ class SortableAdmin(SortableAdminBase, ModelAdmin):
     sortable_change_list_template = 'adminsortable/change_list.html'
     sortable_javascript_includes_template = \
         'adminsortable/shared/javascript_includes.html'
+
+    change_form_template_extends = 'admin/change_form.html'
+    change_list_template_extends = 'admin/change_list.html'
 
     class Meta:
         abstract = True
@@ -160,28 +185,47 @@ class SortableAdmin(SortableAdminBase, ModelAdmin):
         }
         return render(request, self.sortable_change_list_template, context)
 
+    def add_view(self, request, form_url='', extra_context=None):
+        if extra_context is None:
+            extra_context = {}
+
+        extra_context.update({
+            'change_form_template_extends': self.change_form_template_extends
+        })
+        return super(SortableAdmin, self).add_view(request, form_url,
+            extra_context=extra_context)
+
     def change_view(self, request, object_id, extra_context=None):
         self.has_sortable_tabular_inlines = False
         self.has_sortable_stacked_inlines = False
 
+        if extra_context is None:
+            extra_context = {}
+
+        extra_context.update({
+            'change_form_template_extends': self.change_form_template_extends
+        })
+
         for klass in self.inlines:
-            is_sortable = klass.model.is_sortable
-            if issubclass(klass, SortableTabularInline) and is_sortable:
+            if issubclass(klass, SortableTabularInline):
                 self.has_sortable_tabular_inlines = True
-            if issubclass(klass, SortableStackedInline) and is_sortable:
+            if issubclass(klass, SortableStackedInline):
                 self.has_sortable_stacked_inlines = True
 
         if self.has_sortable_tabular_inlines or \
                 self.has_sortable_stacked_inlines:
+
             self.change_form_template = self.sortable_change_form_template
-            extra_context = {
+
+            extra_context.update({
                 'sortable_javascript_includes_template':
                 self.sortable_javascript_includes_template,
                 'has_sortable_tabular_inlines':
                 self.has_sortable_tabular_inlines,
                 'has_sortable_stacked_inlines':
                 self.has_sortable_stacked_inlines
-            }
+            })
+
         return super(SortableAdmin, self).change_view(request, object_id,
             extra_context=extra_context)
 
@@ -193,7 +237,7 @@ class SortableAdmin(SortableAdminBase, ModelAdmin):
         """
         if request.is_ajax() and request.method == 'POST':
             try:
-                indexes = map(str, request.POST.get('indexes', []).split(','))
+                indexes = list(map(str, request.POST.get('indexes', []).split(',')))
                 klass = ContentType.objects.get(id=model_type_id).model_class()
                 objects_dict = dict([(str(obj.pk), obj) for obj in
                     klass.objects.filter(pk__in=indexes)])
@@ -241,12 +285,22 @@ class SortableInlineBase(SortableAdminBase, InlineModelAdmin):
         return qs
 
 
-class SortableTabularInline(SortableInlineBase, TabularInline):
+class SortableTabularInline(TabularInline, SortableInlineBase):
     """Custom template that enables sorting for tabular inlines"""
     template = 'adminsortable/edit_inline/tabular.html'
 
 
-class SortableStackedInline(SortableInlineBase, StackedInline):
+class SortableStackedInline(StackedInline, SortableInlineBase):
+    """Custom template that enables sorting for stacked inlines"""
+    template = 'adminsortable/edit_inline/stacked.html'
+
+
+class SortableGenericTabularInline(GenericTabularInline, SortableInlineBase):
+    """Custom template that enables sorting for tabular inlines"""
+    template = 'adminsortable/edit_inline/tabular.html'
+
+
+class SortableGenericStackedInline(GenericStackedInline, SortableInlineBase):
     """Custom template that enables sorting for stacked inlines"""
     template = 'adminsortable/edit_inline/stacked.html'
 
