@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django import VERSION as DJANGO_VERSION
 from django.contrib.contenttypes.generic import (GenericStackedInline,
